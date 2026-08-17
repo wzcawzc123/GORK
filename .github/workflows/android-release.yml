@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-build-${{ github.ref }}
@@ -117,3 +117,24 @@ jobs:
           archive: false
           if-no-files-found: error
           retention-days: 14
+
+      - name: 发布到 GitHub Release
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*versionName = "([^"]+)".*/\1/')"
+          tag="v${version}"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            echo "Release ${tag} 已存在，更新资产"
+            gh release upload "${tag}" \
+              "${{ steps.apk.outputs.release_path }}" \
+              "${{ steps.apk.outputs.debug_path }}" --clobber
+          else
+            echo "创建 Release ${tag}"
+            gh release create "${tag}" \
+              "${{ steps.apk.outputs.release_path }}" \
+              "${{ steps.apk.outputs.debug_path }}" \
+              --title "${tag}" --generate-notes
+          fi
