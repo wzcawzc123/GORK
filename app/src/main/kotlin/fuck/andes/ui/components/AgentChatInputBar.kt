@@ -107,6 +107,7 @@ internal fun AgentChatInputBar(
     editHasLaterTurns: Boolean,
     onReasoningEffortChange: (ReasoningEffort) -> Unit,
     onModelSelected: (String) -> Unit,
+    onVisionToggled: (String, String, Boolean) -> Unit,
     onSubmit: (String) -> Unit,
     onStop: () -> Unit,
     onAttachImage: (String) -> Unit,
@@ -315,6 +316,7 @@ internal fun AgentChatInputBar(
                             popupAnchorTopPx = inputContainerTopPx,
                             popupMaxHeight = thinkingPopupMaxHeight,
                             onModelSelected = onModelSelected,
+                            onVisionToggled = onVisionToggled,
                         )
 
                         IconButton(
