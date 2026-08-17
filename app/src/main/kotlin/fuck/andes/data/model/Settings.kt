@@ -11,4 +11,7 @@ data class Settings(
     val fourLayerMemoryEnabled: Boolean = true,
     val memoryAutoDistillEnabled: Boolean = true,
     val memoryDistillCursor: Long = 0L,
+    // ── 外观与主题 ──
+    val themeMode: String = "system",
+    val themeAccent: String? = null,
 )

@@ -26,6 +26,8 @@ internal object SettingsDataStore {
     private val FOUR_LAYER_MEMORY_ENABLED = booleanPreferencesKey("four_layer_memory_enabled")
     private val MEMORY_AUTO_DISTILL_ENABLED = booleanPreferencesKey("memory_auto_distill_enabled")
     private val MEMORY_DISTILL_CURSOR = longPreferencesKey("memory_distill_cursor")
+    private val THEME_MODE = stringPreferencesKey("theme_mode")
+    private val THEME_ACCENT = stringPreferencesKey("theme_accent")
     private const val SELECTED_MODEL_BY_PROVIDER_PREFIX = "selected_model_id_by_provider."
 
     private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = STORE_NAME)
@@ -57,6 +59,8 @@ internal object SettingsDataStore {
                     fourLayerMemoryEnabled = prefs[FOUR_LAYER_MEMORY_ENABLED] ?: true,
                     memoryAutoDistillEnabled = prefs[MEMORY_AUTO_DISTILL_ENABLED] ?: true,
                     memoryDistillCursor = prefs[MEMORY_DISTILL_CURSOR] ?: 0L,
+                    themeMode = prefs[THEME_MODE] ?: "system",
+                    themeAccent = prefs[THEME_ACCENT],
                 )
             }
     }
@@ -73,6 +77,8 @@ internal object SettingsDataStore {
                 fourLayerMemoryEnabled = prefs[FOUR_LAYER_MEMORY_ENABLED] ?: true,
                 memoryAutoDistillEnabled = prefs[MEMORY_AUTO_DISTILL_ENABLED] ?: true,
                 memoryDistillCursor = prefs[MEMORY_DISTILL_CURSOR] ?: 0L,
+                themeMode = prefs[THEME_MODE] ?: "system",
+                themeAccent = prefs[THEME_ACCENT],
             )
             val updated = transform(current)
             prefs.putOrRemove(SELECTED_PROVIDER_ID, updated.selectedProviderId)
@@ -81,6 +87,8 @@ internal object SettingsDataStore {
             prefs[FOUR_LAYER_MEMORY_ENABLED] = updated.fourLayerMemoryEnabled
             prefs[MEMORY_AUTO_DISTILL_ENABLED] = updated.memoryAutoDistillEnabled
             prefs[MEMORY_DISTILL_CURSOR] = updated.memoryDistillCursor
+            prefs[THEME_MODE] = updated.themeMode
+            prefs.putOrRemove(THEME_ACCENT, updated.themeAccent)
         }
     }
 
@@ -106,6 +114,20 @@ internal object SettingsDataStore {
 
     fun memoryEnabledFlow(): Flow<Boolean> =
         settingsFlow().map { it.memoryEnabled }
+
+    fun themeModeFlow(): Flow<String> =
+        settingsFlow().map { it.themeMode }
+
+    suspend fun setThemeMode(mode: String) {
+        updateSettings { it.copy(themeMode = mode) }
+    }
+
+    fun accentColorNameFlow(): Flow<String?> =
+        settingsFlow().map { it.themeAccent }
+
+    suspend fun setAccentColorName(name: String?) {
+        updateSettings { it.copy(themeAccent = name) }
+    }
 
     suspend fun setSelectedProviderId(id: String?) {
         updateSettings { it.copy(selectedProviderId = id) }

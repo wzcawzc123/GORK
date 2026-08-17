@@ -7,16 +7,24 @@ import android.content.SharedPreferences
 import android.provider.Settings
 import android.service.voice.VoiceInteractionService
 import android.widget.Toast
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.painterResource
 import com.composables.icons.lucide.R as LucideR
@@ -39,9 +47,11 @@ import fuck.andes.agent.accessibility.AgentAccessibilityService
 import fuck.andes.agent.voice.EtaVoiceInteractionService
 import fuck.andes.config.PowerAssistantTarget
 import fuck.andes.config.Prefs
+import fuck.andes.data.datastore.SettingsDataStore
 import fuck.andes.data.repository.ProviderRepository
 import fuck.andes.data.repository.RuntimeConfigRepository
 import fuck.andes.systemizer.GoogleAppSystemizerInstaller
+import fuck.andes.ui.app.ThemeAccentColors
 import fuck.andes.ui.components.MiuixBackButton
 import fuck.andes.ui.components.MiuixDialogActions
 import fuck.andes.ui.components.TopBarBackdrop
@@ -262,6 +272,47 @@ internal fun SettingsScreen(
                     )
                 }
             }
+
+            item(key = "section_appearance") {
+                SmallTitle("外观与主题")
+                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    val themeMode by SettingsDataStore.themeModeFlow()
+                        .collectAsState(initial = "system")
+                    val accentName by SettingsDataStore.accentColorNameFlow()
+                        .collectAsState(initial = null)
+                    val themeOptions = listOf(
+                        Triple("system", "跟随系统", "明暗随系统深色模式自动切换"),
+                        Triple("light", "浅色", "始终使用浅色配色"),
+                        Triple("dark", "深色", "始终使用深色配色"),
+                    )
+                    themeOptions.forEachIndexed { index, (mode, label, summary) ->
+                        if (index > 0) {
+                            PrefDivider()
+                        }
+                        RadioButtonPreference(
+                            title = label,
+                            summary = summary,
+                            selected = themeMode == mode,
+                            onClick = {
+                                coroutineScope.launch {
+                                    SettingsDataStore.setThemeMode(mode)
+                                }
+                            },
+                            radioButtonLocation = RadioButtonLocation.End,
+                        )
+                    }
+                    PrefDivider()
+                    AccentColorPreference(
+                        selectedName = accentName,
+                        onSelect = { name ->
+                            coroutineScope.launch {
+                                SettingsDataStore.setAccentColorName(name)
+                            }
+                        },
+                    )
+                }
+            }
+
 
             // ── 工具 ───────────────────────────────────────────────────
             item(key = "section_tools") {
@@ -764,6 +815,90 @@ private fun PowerAssistantTargetDialog(
  * 配置来源由调用方按能力边界传入。Hook 开关仍可能因 LSPosed 未连接而禁用；Agent
  * Runtime 开关始终使用 App 本地配置。
  */
+// ── 强调色选择行 ─────────────────────────────────────────────────────────────
+@Composable
+private fun AccentColorPreference(
+    selectedName: String?,
+    onSelect: (String?) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "强调色",
+            style = MiuixTheme.textStyles.body1,
+            color = MiuixTheme.colorScheme.onSurface,
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ThemeColorDot(
+                selected = selectedName == null,
+                color = null,
+                contentDescription = "默认配色",
+                onClick = { onSelect(null) },
+            )
+            ThemeAccentColors.presets.forEach { preset ->
+                ThemeColorDot(
+                    selected = selectedName == preset.name,
+                    color = Color(preset.argb),
+                    contentDescription = preset.displayName,
+                    onClick = { onSelect(preset.name) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThemeColorDot(
+    selected: Boolean,
+    color: Color?,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick)
+            .border(
+                width = if (selected) 2.dp else 0.5.dp,
+                color = if (selected) {
+                    MiuixTheme.colorScheme.primary
+                } else {
+                    MiuixTheme.colorScheme.outline.copy(alpha = 0.6f)
+                },
+                shape = CircleShape,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(20.dp)
+                .clip(CircleShape)
+                .background(
+                    color ?: MiuixTheme.colorScheme.surfaceContainerHigh,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (selected) {
+                Icon(
+                    painter = painterResource(LucideR.drawable.lucide_ic_check),
+                    contentDescription = contentDescription,
+                    modifier = Modifier.size(12.dp),
+                    tint = if (color != null) Color.White else MiuixTheme.colorScheme.onSurface,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun SwitchPref(
     context: Context,

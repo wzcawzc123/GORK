@@ -62,19 +62,10 @@ internal class AgentRuntimeClient(
             preparedImagesRef.set(preparedImages)
             msg.data = AgentRuntimeWire.toBundle(request, preparedImages.images)
             serviceMessenger.send(msg)
-            if (!resultLatch.await(RUN_TIMEOUT_MINUTES, TimeUnit.MINUTES)) {
-                runCatching {
-                    val cancelMessage = Message.obtain(null, AgentRuntimeWire.MSG_CANCEL)
-                    cancelMessage.data = AgentRuntimeWire.ackBundle(request.runId)
-                    serviceMessenger.send(cancelMessage)
-                }
-                return AgentRuntimeWire.RunResult(
-                    runId = request.runId,
-                    ok = false,
-                    content = "",
-                    error = "Agent Runtime 执行超时",
-                )
-            }
+            // 无超时等待：长任务不受 30 分钟上限限制。服务进程断开时由 deathRecipient
+            // （linkToDeath）唤醒并返回“服务连接已断开”；手动取消由 cancelRun 支持；
+            // Runtime 无响应但连接未断时保持等待，不再强制掐断长任务。
+            resultLatch.await()
             return resultRef.get() ?: AgentRuntimeWire.RunResult("", false, "", "Agent Runtime 未返回结果")
         } catch (interrupted: InterruptedException) {
             Thread.currentThread().interrupt()
@@ -188,6 +179,5 @@ internal class AgentRuntimeClient(
 
     private companion object {
         const val RESPONSE_TIMEOUT_SECONDS = 8L
-        const val RUN_TIMEOUT_MINUTES = 30L
     }
 }
