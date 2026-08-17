@@ -441,6 +441,27 @@ fun AgentAppRoot(
                             AgentMemoryAction.Save -> agentState.saveMemory()
                             AgentMemoryAction.Clear -> agentState.clearMemory()
                             AgentMemoryAction.DismissNotice -> agentState.dismissMemoryNotice()
+                            is AgentMemoryAction.ToggleFourLayerEnabled ->
+                                agentState.setFourLayerMemoryEnabled(action.enabled)
+                            is AgentMemoryAction.AtomInputChanged ->
+                                agentState.updateMemoryState(agentState.memoryState.copy(atomInput = action.content))
+                            is AgentMemoryAction.AtomCategoryChanged ->
+                                agentState.updateMemoryState(agentState.memoryState.copy(atomCategory = action.category))
+                            AgentMemoryAction.AddAtom -> agentState.addMemoryAtom()
+                            is AgentMemoryAction.DeleteAtom -> agentState.deleteMemoryAtom(action.id)
+                            is AgentMemoryAction.ScenarioNameChanged ->
+                                agentState.updateMemoryState(agentState.memoryState.copy(scenarioNameInput = action.name))
+                            is AgentMemoryAction.ScenarioContentChanged ->
+                                agentState.updateMemoryState(agentState.memoryState.copy(scenarioContentInput = action.content))
+                            AgentMemoryAction.SaveScenario -> agentState.saveMemoryScenario()
+                            is AgentMemoryAction.DeleteScenario -> agentState.deleteMemoryScenario(action.id)
+                            is AgentMemoryAction.ProfileKeyChanged ->
+                                agentState.updateMemoryState(agentState.memoryState.copy(profileKeyInput = action.key))
+                            is AgentMemoryAction.ProfileValueChanged ->
+                                agentState.updateMemoryState(agentState.memoryState.copy(profileValueInput = action.value))
+                            AgentMemoryAction.AddProfile -> agentState.addMemoryProfile()
+                            is AgentMemoryAction.DeleteProfile -> agentState.deleteMemoryProfile(action.key)
+                            AgentMemoryAction.RefreshLayers -> agentState.refreshMemoryLayers()
                         }
                     },
                 )

@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import fuck.andes.data.model.Settings
@@ -22,6 +23,9 @@ internal object SettingsDataStore {
     private val SELECTED_PROVIDER_ID = stringPreferencesKey("selected_provider_id")
     private val SELECTED_MODEL_ID = stringPreferencesKey("selected_model_id")
     private val MEMORY_ENABLED = booleanPreferencesKey("memory_enabled")
+    private val FOUR_LAYER_MEMORY_ENABLED = booleanPreferencesKey("four_layer_memory_enabled")
+    private val MEMORY_AUTO_DISTILL_ENABLED = booleanPreferencesKey("memory_auto_distill_enabled")
+    private val MEMORY_DISTILL_CURSOR = longPreferencesKey("memory_distill_cursor")
     private const val SELECTED_MODEL_BY_PROVIDER_PREFIX = "selected_model_id_by_provider."
 
     private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = STORE_NAME)
@@ -50,6 +54,9 @@ internal object SettingsDataStore {
                     selectedProviderId = prefs[SELECTED_PROVIDER_ID],
                     selectedModelId = prefs[SELECTED_MODEL_ID],
                     memoryEnabled = prefs[MEMORY_ENABLED] ?: true,
+                    fourLayerMemoryEnabled = prefs[FOUR_LAYER_MEMORY_ENABLED] ?: true,
+                    memoryAutoDistillEnabled = prefs[MEMORY_AUTO_DISTILL_ENABLED] ?: true,
+                    memoryDistillCursor = prefs[MEMORY_DISTILL_CURSOR] ?: 0L,
                 )
             }
     }
@@ -63,11 +70,17 @@ internal object SettingsDataStore {
                 selectedProviderId = prefs[SELECTED_PROVIDER_ID],
                 selectedModelId = prefs[SELECTED_MODEL_ID],
                 memoryEnabled = prefs[MEMORY_ENABLED] ?: true,
+                fourLayerMemoryEnabled = prefs[FOUR_LAYER_MEMORY_ENABLED] ?: true,
+                memoryAutoDistillEnabled = prefs[MEMORY_AUTO_DISTILL_ENABLED] ?: true,
+                memoryDistillCursor = prefs[MEMORY_DISTILL_CURSOR] ?: 0L,
             )
             val updated = transform(current)
             prefs.putOrRemove(SELECTED_PROVIDER_ID, updated.selectedProviderId)
             prefs.putOrRemove(SELECTED_MODEL_ID, updated.selectedModelId)
             prefs[MEMORY_ENABLED] = updated.memoryEnabled
+            prefs[FOUR_LAYER_MEMORY_ENABLED] = updated.fourLayerMemoryEnabled
+            prefs[MEMORY_AUTO_DISTILL_ENABLED] = updated.memoryAutoDistillEnabled
+            prefs[MEMORY_DISTILL_CURSOR] = updated.memoryDistillCursor
         }
     }
 
@@ -128,6 +141,25 @@ internal object SettingsDataStore {
 
     suspend fun setMemoryEnabled(enabled: Boolean) {
         updateSettings { it.copy(memoryEnabled = enabled) }
+    }
+
+    fun fourLayerMemoryEnabledFlow(): Flow<Boolean> =
+        settingsFlow().map { it.fourLayerMemoryEnabled }
+
+    suspend fun setFourLayerMemoryEnabled(enabled: Boolean) {
+        updateSettings { it.copy(fourLayerMemoryEnabled = enabled) }
+    }
+
+    fun memoryAutoDistillEnabledFlow(): Flow<Boolean> =
+        settingsFlow().map { it.memoryAutoDistillEnabled }
+
+    suspend fun setMemoryAutoDistillEnabled(enabled: Boolean) {
+        updateSettings { it.copy(memoryAutoDistillEnabled = enabled) }
+    }
+
+    /** 自动沉淀游标（已处理到的 L0 createdAt），进程内缓存 + DataStore 持久化。 */
+    suspend fun setMemoryDistillCursor(value: Long) {
+        updateSettings { it.copy(memoryDistillCursor = value) }
     }
 
     private fun ensureInitialized() {

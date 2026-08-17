@@ -36,12 +36,16 @@ import fuck.andes.core.safeLogType
 import fuck.andes.data.model.ModelReasoningCapabilities
 import fuck.andes.data.model.ReasoningEffort
 import fuck.andes.data.repository.AgentMemoryRepository
+import fuck.andes.data.repository.MemoryLayerRepository
 import fuck.andes.data.repository.ProviderRepository
 import fuck.andes.data.repository.RuntimeConfigRepository
 import fuck.andes.ui.model.AgentChatHomeUiState
 import fuck.andes.ui.model.AgentChatMessageUi
 import fuck.andes.ui.model.AgentMessageUi
 import fuck.andes.ui.model.AgentMemoryUiState
+import fuck.andes.ui.model.MemoryAtomUi
+import fuck.andes.ui.model.MemoryProfileUi
+import fuck.andes.ui.model.MemoryScenarioUi
 import fuck.andes.ui.model.AgentModelPickerProjector
 import fuck.andes.ui.model.AgentModelPickerUiState
 import fuck.andes.ui.model.MessageEditUiState
@@ -234,6 +238,7 @@ internal class AgentAppState(
                             draftBytes = snapshot.byteSize,
                             coreBudgetChars = coreBudget,
                         )
+                        refreshMemoryLayers()
                     }
                 },
                 onFailure = { throwable ->
@@ -250,6 +255,193 @@ internal class AgentAppState(
             )
         }
     }
+
+    fun updateMemoryState(state: AgentMemoryUiState) {
+        memoryState = state
+    }
+
+    fun refreshMemoryLayers() {
+        memoryState = memoryState.copy(fourLayerLoading = true, notice = null)
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                val enabled = MemoryLayerRepository.isEnabled()
+                val atoms = MemoryLayerRepository.recentAtoms(100)
+                    .map { MemoryAtomUi(it.id, it.content, it.category, it.updatedAt) }
+                val scenarios = MemoryLayerRepository.listScenarios(200)
+                    .map { MemoryScenarioUi(it.id, it.name, it.content, it.updatedAt) }
+                val profile = MemoryLayerRepository.profileAll()
+                    .map { MemoryProfileUi(it.key, it.value, it.updatedAt) }
+                val conversationCount = MemoryLayerRepository.conversationCount()
+                FourLayerSnapshot(enabled, atoms, scenarios, profile, conversationCount)
+            }.fold(
+                onSuccess = { snapshot ->
+                    withContext(Dispatchers.Main) {
+                        memoryState = memoryState.copy(
+                            fourLayerLoading = false,
+                            fourLayerEnabled = snapshot.enabled,
+                            atoms = snapshot.atoms,
+                            scenarios = snapshot.scenarios,
+                            profile = snapshot.profile,
+                            conversationCount = snapshot.conversationCount,
+                        )
+                    }
+                },
+                onFailure = { throwable ->
+                    AndroidAgentLogger.warnThrottled("agent_memory_layers_load_failed") {
+                        "Agent four-layer memory load failed: type=${throwable.safeLogType()}"
+                    }
+                    withContext(Dispatchers.Main) {
+                        memoryState = memoryState.copy(
+                            fourLayerLoading = false,
+                            notice = "四层记忆读取失败，请稍后重试",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun setFourLayerMemoryEnabled(enabled: Boolean) {
+        scope.launch(Dispatchers.IO) {
+            runCatching { MemoryLayerRepository.setEnabled(enabled) }
+                .fold(
+                    onSuccess = {
+                        withContext(Dispatchers.Main) {
+                            memoryState = memoryState.copy(
+                                fourLayerEnabled = enabled,
+                                notice = null,
+                            )
+                        }
+                    },
+                    onFailure = { throwable ->
+                        AndroidAgentLogger.warnThrottled("agent_memory_layers_toggle_failed") {
+                            "Agent four-layer memory toggle failed: type=${throwable.safeLogType()}"
+                        }
+                        withContext(Dispatchers.Main) {
+                            memoryState = memoryState.copy(notice = "四层记忆开关保存失败")
+                        }
+                    },
+                )
+        }
+    }
+
+    fun addMemoryAtom() {
+        val content = memoryState.atomInput.trim()
+        val category = memoryState.atomCategory.trim().ifBlank { "general" }
+        if (content.isBlank()) return
+        scope.launch(Dispatchers.IO) {
+            runCatching { MemoryLayerRepository.writeAtom(content, category) }
+                .fold(
+                    onSuccess = {
+                        withContext(Dispatchers.Main) {
+                            memoryState = memoryState.copy(
+                                atomInput = "",
+                                notice = "原子记忆已保存",
+                            )
+                            refreshMemoryLayers()
+                        }
+                    },
+                    onFailure = { throwable ->
+                        withContext(Dispatchers.Main) {
+                            memoryState = memoryState.copy(
+                                notice = throwable.message ?: "原子记忆保存失败",
+                            )
+                        }
+                    },
+                )
+        }
+    }
+
+    fun deleteMemoryAtom(id: String) {
+        scope.launch(Dispatchers.IO) {
+            runCatching { MemoryLayerRepository.deleteAtom(id) }
+                .onSuccess {
+                    withContext(Dispatchers.Main) { refreshMemoryLayers() }
+                }
+        }
+    }
+
+    fun saveMemoryScenario() {
+        val name = memoryState.scenarioNameInput.trim()
+        val content = memoryState.scenarioContentInput.trim()
+        if (name.isBlank() || content.isBlank()) return
+        scope.launch(Dispatchers.IO) {
+            runCatching { MemoryLayerRepository.saveScenario(name, content) }
+                .fold(
+                    onSuccess = {
+                        withContext(Dispatchers.Main) {
+                            memoryState = memoryState.copy(
+                                scenarioNameInput = "",
+                                scenarioContentInput = "",
+                                notice = "场景记忆已保存",
+                            )
+                            refreshMemoryLayers()
+                        }
+                    },
+                    onFailure = { throwable ->
+                        withContext(Dispatchers.Main) {
+                            memoryState = memoryState.copy(
+                                notice = throwable.message ?: "场景记忆保存失败",
+                            )
+                        }
+                    },
+                )
+        }
+    }
+
+    fun deleteMemoryScenario(id: String) {
+        scope.launch(Dispatchers.IO) {
+            runCatching { MemoryLayerRepository.deleteScenario(id) }
+                .onSuccess {
+                    withContext(Dispatchers.Main) { refreshMemoryLayers() }
+                }
+        }
+    }
+
+    fun addMemoryProfile() {
+        val key = memoryState.profileKeyInput.trim()
+        val value = memoryState.profileValueInput.trim()
+        if (key.isBlank() || value.isBlank()) return
+        scope.launch(Dispatchers.IO) {
+            runCatching { MemoryLayerRepository.updateProfile(key, value) }
+                .fold(
+                    onSuccess = {
+                        withContext(Dispatchers.Main) {
+                            memoryState = memoryState.copy(
+                                profileKeyInput = "",
+                                profileValueInput = "",
+                                notice = "核心画像已保存",
+                            )
+                            refreshMemoryLayers()
+                        }
+                    },
+                    onFailure = { throwable ->
+                        withContext(Dispatchers.Main) {
+                            memoryState = memoryState.copy(
+                                notice = throwable.message ?: "核心画像保存失败",
+                            )
+                        }
+                    },
+                )
+        }
+    }
+
+    fun deleteMemoryProfile(key: String) {
+        scope.launch(Dispatchers.IO) {
+            runCatching { MemoryLayerRepository.deleteProfile(key) }
+                .onSuccess {
+                    withContext(Dispatchers.Main) { refreshMemoryLayers() }
+                }
+        }
+    }
+
+    private data class FourLayerSnapshot(
+        val enabled: Boolean,
+        val atoms: List<MemoryAtomUi>,
+        val scenarios: List<MemoryScenarioUi>,
+        val profile: List<MemoryProfileUi>,
+        val conversationCount: Int,
+    )
 
     fun updateMemoryDraft(content: String) {
         memoryState = memoryState.copy(
@@ -824,6 +1016,11 @@ internal class AgentAppState(
         persistConversations()
 
         currentRunJob = scope.launch(Dispatchers.IO) {
+            runCatching {
+                if (MemoryLayerRepository.isEnabled()) {
+                    MemoryLayerRepository.recordConversation("user", prompt)
+                }
+            }
             val permittedReasoningEffort = if (
                 agentBooleanForUi(Prefs.Keys.AGENT_THINKING_ENABLED)
             ) {
@@ -1594,6 +1791,16 @@ internal class AgentAppState(
         acknowledgeRuntimeResult: Boolean = false,
     ) {
         flushPendingRunDelta(runId)
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                if (MemoryLayerRepository.isEnabled()) {
+                    MemoryLayerRepository.recordConversation(
+                        "assistant",
+                        if (result.ok) result.content else (result.error ?: ""),
+                    )
+                }
+            }
+        }
         if (runId == currentRunId) {
             currentRunId = null
             currentRunJob = null

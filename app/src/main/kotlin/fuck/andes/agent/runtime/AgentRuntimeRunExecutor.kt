@@ -18,6 +18,7 @@ import fuck.andes.agent.tool.ToolExecutionDecision
 import fuck.andes.core.AndroidAgentLogger
 import fuck.andes.core.safeLogType
 import fuck.andes.data.repository.AgentMemoryRepository
+import fuck.andes.data.repository.MemoryLayerRepository
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -77,9 +78,13 @@ internal class AgentRuntimeRunExecutor(
             val memoryEnabled = runBlocking { AgentMemoryRepository.isEnabled() }
             val memoryContext = if (memoryEnabled) {
                 runCatching {
+                    val fourLayerSummary = runBlocking {
+                        MemoryLayerRepository.buildContextSummary()
+                    }
                     AgentMemoryContextBuilder.build(
                         snapshot = AgentMemoryRepository.snapshot(),
                         contextWindow = request.config.contextWindow,
+                        fourLayerSummary = fourLayerSummary,
                     )
                 }.getOrElse { throwable ->
                     AndroidAgentLogger.warnThrottled("agent_memory_context_failed") {

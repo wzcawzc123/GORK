@@ -10,6 +10,7 @@ import fuck.andes.core.safeLogType
 import fuck.andes.data.datastore.SettingsDataStore
 import fuck.andes.data.repository.ProviderRepository
 import fuck.andes.data.repository.AgentMemoryRepository
+import fuck.andes.data.repository.MemoryLayerRepository
 import io.github.libxposed.service.XposedService
 import io.github.libxposed.service.XposedServiceHelper
 import java.util.concurrent.CopyOnWriteArraySet
@@ -42,6 +43,7 @@ class FuckAndesApp : Application(), XposedServiceHelper.OnServiceListener {
         }
         SettingsDataStore.init(this)
         AgentMemoryRepository.init(this)
+        MemoryLayerRepository.init(this)
         ProviderRepository.init(this)
         XposedServiceHelper.registerListener(this)
         applicationScope.launch {

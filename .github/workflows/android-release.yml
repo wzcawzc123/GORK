@@ -43,30 +43,32 @@ jobs:
       - name: 安装 Android SDK 37
         run: sdkmanager --channel=3 "platforms;android-37.0"
 
-      - name: 还原发布证书
-        env:
-          ETA_RELEASE_KEYSTORE_BASE64: ${{ secrets.ETA_RELEASE_KEYSTORE_BASE64 }}
-          ETA_RELEASE_STORE_PASSWORD: ${{ secrets.ETA_RELEASE_STORE_PASSWORD }}
-          ETA_RELEASE_KEY_ALIAS: ${{ secrets.ETA_RELEASE_KEY_ALIAS }}
-          ETA_RELEASE_KEY_PASSWORD: ${{ secrets.ETA_RELEASE_KEY_PASSWORD }}
+      - name: 准备签名（有 Secrets 用发布证书，否则临时自签）
         run: |
-          if [[ -z "$ETA_RELEASE_KEYSTORE_BASE64" ||
-                -z "$ETA_RELEASE_STORE_PASSWORD" ||
-                -z "$ETA_RELEASE_KEY_ALIAS" ||
-                -z "$ETA_RELEASE_KEY_PASSWORD" ]]; then
-            echo "::error::缺少 Release 签名 Secrets，请检查仓库的 Actions Secrets。"
-            exit 1
+          if [[ -n "${{ secrets.ETA_RELEASE_KEYSTORE_BASE64 }}" && \
+                -n "${{ secrets.ETA_RELEASE_STORE_PASSWORD }}" && \
+                -n "${{ secrets.ETA_RELEASE_KEY_ALIAS }}" && \
+                -n "${{ secrets.ETA_RELEASE_KEY_PASSWORD }}" ]]; then
+            printf '%s' "${{ secrets.ETA_RELEASE_KEYSTORE_BASE64 }}" \
+              | base64 --decode \
+              > "$RUNNER_TEMP/eta-release.jks"
+            echo "SIGN_MODE=secrets" >> "$GITHUB_ENV"
+          else
+            keytool -genkeypair -v \
+              -keystore "$RUNNER_TEMP/eta-release.jks" \
+              -alias eta -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass eta-release-pass -keypass eta-release-pass \
+              -dname "CN=Eta Self-Signed, OU=Eta, O=Eta, L=CN, ST=CN, C=CN"
+            echo "SIGN_MODE=self-signed" >> "$GITHUB_ENV"
+            echo "::warning::未配置 Release 签名 Secrets，已使用临时自签证书构建（正式版为自签名，安装需允许未知来源）。"
           fi
-          printf '%s' "$ETA_RELEASE_KEYSTORE_BASE64" \
-            | base64 --decode \
-            > "$RUNNER_TEMP/eta-release.jks"
 
       - name: 构建 Debug 与 Release APK
         env:
           ETA_RELEASE_STORE_FILE: ${{ runner.temp }}/eta-release.jks
-          ETA_RELEASE_STORE_PASSWORD: ${{ secrets.ETA_RELEASE_STORE_PASSWORD }}
-          ETA_RELEASE_KEY_ALIAS: ${{ secrets.ETA_RELEASE_KEY_ALIAS }}
-          ETA_RELEASE_KEY_PASSWORD: ${{ secrets.ETA_RELEASE_KEY_PASSWORD }}
+          ETA_RELEASE_STORE_PASSWORD: ${{ secrets.ETA_RELEASE_STORE_PASSWORD || 'eta-release-pass' }}
+          ETA_RELEASE_KEY_ALIAS: ${{ secrets.ETA_RELEASE_KEY_ALIAS || 'eta' }}
+          ETA_RELEASE_KEY_PASSWORD: ${{ secrets.ETA_RELEASE_KEY_PASSWORD || 'eta-release-pass' }}
         run: >-
           ./gradlew --no-daemon --no-configuration-cache
           :app:assembleDebug :app:assembleRelease

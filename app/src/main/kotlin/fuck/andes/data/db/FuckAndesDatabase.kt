@@ -6,6 +6,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [
@@ -19,8 +20,12 @@ import androidx.room.migration.Migration
         RuntimeArchiveRunEntity::class,
         RuntimeArchiveEventEntity::class,
         SkillRegistryEntity::class,
+        MemoryConversationEntity::class,
+        MemoryAtomEntity::class,
+        MemoryScenarioEntity::class,
+        MemoryProfileEntity::class,
     ],
-    version = 15,
+    version = 17,
     exportSchema = false,
 )
 internal abstract class FuckAndesDatabase : RoomDatabase() {
@@ -28,6 +33,7 @@ internal abstract class FuckAndesDatabase : RoomDatabase() {
     abstract fun providerDao(): ProviderDao
     abstract fun runtimeRunDao(): RuntimeRunDao
     abstract fun skillDao(): SkillDao
+    abstract fun memoryLayerDao(): MemoryLayerDao
 
     companion object {
         @Volatile
@@ -50,6 +56,16 @@ internal abstract class FuckAndesDatabase : RoomDatabase() {
                         MIGRATION_12_13,
                         MIGRATION_13_14,
                         MIGRATION_14_15,
+                        MIGRATION_15_16,
+                        MIGRATION_16_17,
+                    )
+                    .addCallback(
+                        object : RoomDatabase.Callback() {
+                            override fun onOpen(db: SupportSQLiteDatabase) {
+                                super.onOpen(db)
+                                ensureFtsSchema(db)
+                            }
+                        }
                     )
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
@@ -171,6 +187,114 @@ internal abstract class FuckAndesDatabase : RoomDatabase() {
                 "ALTER TABLE provider_models ADD COLUMN " +
                     "reasoning_capabilities_override_json TEXT NOT NULL DEFAULT 'null'"
             )
+        }
+
+        /** 本地四层记忆（L0–L3）表创建。DDL 与 MemoryLayerEntities 的 @Entity 定义逐字一致。 */
+        internal val MIGRATION_15_16 = Migration(15, 16) { database ->
+            database.execSQL(
+                "CREATE TABLE IF NOT EXISTS memory_conversations (" +
+                    "id TEXT NOT NULL PRIMARY KEY, " +
+                    "role TEXT NOT NULL, " +
+                    "content TEXT NOT NULL, " +
+                    "createdAt INTEGER NOT NULL)"
+            )
+            database.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_memory_conversations_createdAt ON memory_conversations(createdAt)"
+            )
+            database.execSQL(
+                "CREATE TABLE IF NOT EXISTS memory_atoms (" +
+                    "id TEXT NOT NULL PRIMARY KEY, " +
+                    "content TEXT NOT NULL, " +
+                    "category TEXT NOT NULL, " +
+                    "createdAt INTEGER NOT NULL, " +
+                    "updatedAt INTEGER NOT NULL, " +
+                    "usageCount INTEGER NOT NULL)"
+            )
+            database.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_memory_atoms_content ON memory_atoms(content)"
+            )
+            database.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_memory_atoms_updatedAt ON memory_atoms(updatedAt)"
+            )
+            database.execSQL(
+                "CREATE TABLE IF NOT EXISTS memory_scenarios (" +
+                    "id TEXT NOT NULL PRIMARY KEY, " +
+                    "name TEXT NOT NULL, " +
+                    "content TEXT NOT NULL, " +
+                    "createdAt INTEGER NOT NULL, " +
+                    "updatedAt INTEGER NOT NULL)"
+            )
+            database.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS index_memory_scenarios_name ON memory_scenarios(name)"
+            )
+            database.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_memory_scenarios_updatedAt ON memory_scenarios(updatedAt)"
+            )
+            database.execSQL(
+                "CREATE TABLE IF NOT EXISTS memory_profile (" +
+                    "key TEXT NOT NULL PRIMARY KEY, " +
+                    "value TEXT NOT NULL, " +
+                    "updatedAt INTEGER NOT NULL)"
+            )
+        }
+
+        /** 记忆系统升级：memory_atoms 增加检索用 2-gram 列（存量由应用层惰性补算）。 */
+        internal val MIGRATION_16_17 = Migration(16, 17) { database ->
+            // 注意：FTS5 虚拟表与触发器不能在 migration 里无条件创建——部分厂商
+            // ROM（如 ColorOS）的系统 SQLite 未编译 FTS5 模块，会抛
+            // 'no such module: fts5' 导致 DB 打开失败、应用启动即崩。
+            // 虚拟表/触发器统一由 onOpen 的 ensureFtsSchema 按设备能力创建（幂等）。
+            database.execSQL(
+                "ALTER TABLE memory_atoms ADD COLUMN search_grams TEXT NOT NULL DEFAULT ''"
+            )
+        }
+
+        /**
+         * FTS5 在当前设备是否可用。系统 SQLite 未编译 FTS5 时（部分厂商 ROM），
+         * 检索自动降级 LIKE；本标志由 onOpen 检测后设置，供仓库层短路。
+         */
+        @Volatile
+        var fts5Supported: Boolean = false
+            private set
+
+        /**
+         * 确保 FTS5 虚拟表与同步触发器存在。仅在设备 SQLite 支持 FTS5 时创建：
+         * 不支持则静默跳过（检索降级 LIKE，不影响业务）。migration 只覆盖旧库
+         * 升级路径；全新安装时 Room 不创建非 @Entity 的虚拟表，必须在此兜底（幂等）。
+         */
+        private fun ensureFtsSchema(db: SupportSQLiteDatabase) {
+            val supported = runCatching {
+                db.query("SELECT sqlite_compileoption_used('ENABLE_FTS5')").use { cursor ->
+                    cursor.moveToFirst() && cursor.getInt(0) == 1
+                }
+            }.getOrDefault(false)
+            if (!supported) return
+            val created = runCatching {
+                db.execSQL(
+                    "CREATE VIRTUAL TABLE IF NOT EXISTS memory_atoms_fts USING fts5(" +
+                        "content, category, search_grams, " +
+                        "content='memory_atoms', content_rowid='rowid', " +
+                        "tokenize='unicode61')"
+                )
+                db.execSQL(
+                    "CREATE TRIGGER IF NOT EXISTS memory_atoms_fts_ai AFTER INSERT ON memory_atoms BEGIN " +
+                        "INSERT INTO memory_atoms_fts(rowid, content, category, search_grams) " +
+                        "VALUES (new.rowid, new.content, new.category, new.search_grams); END"
+                )
+                db.execSQL(
+                    "CREATE TRIGGER IF NOT EXISTS memory_atoms_fts_ad AFTER DELETE ON memory_atoms BEGIN " +
+                        "INSERT INTO memory_atoms_fts(memory_atoms_fts, rowid, content, category, search_grams) " +
+                        "VALUES('delete', old.rowid, old.content, old.category, old.search_grams); END"
+                )
+                db.execSQL(
+                    "CREATE TRIGGER IF NOT EXISTS memory_atoms_fts_au AFTER UPDATE ON memory_atoms BEGIN " +
+                        "INSERT INTO memory_atoms_fts(memory_atoms_fts, rowid, content, category, search_grams) " +
+                        "VALUES('delete', old.rowid, old.content, old.category, old.search_grams); " +
+                        "INSERT INTO memory_atoms_fts(rowid, content, category, search_grams) " +
+                        "VALUES (new.rowid, new.content, new.category, new.search_grams); END"
+                )
+            }.isSuccess
+            fts5Supported = created
         }
     }
 }
