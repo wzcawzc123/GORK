@@ -140,6 +140,16 @@
         </service>
 
         <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="fuck.andes.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <provider
             android:name=".agent.accessibility.AgentAccessibilityHealthProvider"
             android:authorities="fuck.andes.accessibility.health"
             android:exported="true"

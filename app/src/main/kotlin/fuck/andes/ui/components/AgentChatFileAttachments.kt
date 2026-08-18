@@ -1,9 +1,13 @@
 package fuck.andes.ui.components
 
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import java.io.File
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -76,16 +80,18 @@ internal fun AgentAttachmentPickerButton(
     var showPathDialog by remember { mutableStateOf(false) }
     var pathInput by remember { mutableStateOf("") }
     val photoPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia(),
-    ) { uri ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                )
+        contract = ActivityResultContracts.PickMultipleVisualMedia(),
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            uris.forEach { uri ->
+                runCatching {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                    )
+                }
+                onAttachImage(uri.toString())
             }
-            onAttachImage(uri.toString())
         }
     }
     val filePicker = rememberLauncherForActivityResult(
@@ -97,6 +103,18 @@ internal fun AgentAttachmentPickerButton(
         contract = ActivityResultContracts.OpenDocumentTree(),
     ) { uri ->
         if (uri != null) onAttachFolder(uri.toString())
+    }
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture(),
+    ) { success ->
+        val uri = pendingCameraUri
+        pendingCameraUri = null
+        if (success && uri != null) {
+            onAttachImage(uri.toString())
+        } else if (uri != null) {
+            runCatching { context.contentResolver.delete(uri, null, null) }
+        }
     }
 
     Box(modifier = modifier) {
@@ -123,7 +141,7 @@ internal fun AgentAttachmentPickerButton(
             maxHeight = popupMaxHeight,
         ) {
             val dismiss = LocalDismissState.current
-            val options = remember { listOf("图片", "文件", "文件夹", "输入路径") }
+            val options = remember { listOf("图片", "拍照", "文件", "文件夹", "输入路径") }
             ListPopupColumn {
                 options.forEachIndexed { index, option ->
                     DropdownImpl(
@@ -139,9 +157,16 @@ internal fun AgentAttachmentPickerButton(
                                         ActivityResultContracts.PickVisualMedia.ImageOnly
                                     )
                                 )
-                                1 -> filePicker.launch(arrayOf("*/*"))
-                                2 -> folderPicker.launch(null)
-                                3 -> {
+                                1 -> {
+                                    val uri = createCameraCaptureUri(context)
+                                    if (uri != null) {
+                                        pendingCameraUri = uri
+                                        cameraLauncher.launch(uri)
+                                    }
+                                }
+                                2 -> filePicker.launch(arrayOf("*/*"))
+                                3 -> folderPicker.launch(null)
+                                4 -> {
                                     pathInput = ""
                                     showPathDialog = true
                                 }
@@ -309,6 +334,12 @@ internal fun SentFileReferenceFlow(
         }
     }
 }
+
+private fun createCameraCaptureUri(context: Context): Uri? = runCatching {
+    val dir = File(context.cacheDir, "camera").apply { mkdirs() }
+    val file = File(dir, "eta_capture_${System.currentTimeMillis()}.jpg")
+    FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+}.getOrNull()
 
 internal class InputPopupPositionProvider(
     private val inputContainerTopPx: Int,
