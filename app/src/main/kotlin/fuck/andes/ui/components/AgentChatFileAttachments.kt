@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -104,7 +105,7 @@ internal fun AgentAttachmentPickerButton(
     ) { uri ->
         if (uri != null) onAttachFolder(uri.toString())
     }
-    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingCameraUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture(),
     ) { success ->
@@ -113,7 +114,7 @@ internal fun AgentAttachmentPickerButton(
         if (success && uri != null) {
             onAttachImage(uri.toString())
         } else if (uri != null) {
-            runCatching { context.contentResolver.delete(uri, null, null) }
+            deleteCameraCaptureFile(context, uri)
         }
     }
 
@@ -340,6 +341,15 @@ private fun createCameraCaptureUri(context: Context): Uri? = runCatching {
     val file = File(dir, "eta_capture_${System.currentTimeMillis()}.jpg")
     FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 }.getOrNull()
+
+/** 拍照临时文件：仅在未进入 attach 流程（取消/失败）时由组件层清理；
+ *  成功路径由 AgentAppState.attachImage 读取完成后清理，避免读取竞态。 */
+private fun deleteCameraCaptureFile(context: Context, uri: Uri?) {
+    if (uri == null) return
+    if (uri.authority != "${context.packageName}.fileprovider") return
+    val name = uri.lastPathSegment ?: return
+    runCatching { File(context.cacheDir, "camera").resolve(name).delete() }
+}
 
 internal class InputPopupPositionProvider(
     private val inputContainerTopPx: Int,

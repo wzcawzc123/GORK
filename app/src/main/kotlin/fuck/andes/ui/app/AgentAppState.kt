@@ -5,6 +5,7 @@ import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import java.io.File
 import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
@@ -1192,6 +1193,13 @@ internal class AgentAppState(
                             selectedUri,
                             Intent.FLAG_GRANT_READ_URI_PERMISSION,
                         )
+                    }
+                    // 相机拍照临时文件：读取完成后内容已转为 data URL，源文件即可清理。
+                    if (selectedUri.authority == "${appContext.packageName}.fileprovider") {
+                        val name = selectedUri.lastPathSegment
+                        if (name != null) {
+                            runCatching { File(appContext.cacheDir, "camera").resolve(name).delete() }
+                        }
                     }
                 }
             }
