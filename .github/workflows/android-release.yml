@@ -95,7 +95,7 @@ jobs:
             exit 1
           fi
 
-          "$apksigner_path" verify "$release_apk"
+          "$apksigner_path" verify --print-certs "$release_apk"
           mkdir -p "$output_dir"
           cp "$debug_apk" "$output_dir/app-debug.apk"
           cp "$release_apk" "$output_dir/app-release.apk"
