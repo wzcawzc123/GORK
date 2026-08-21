@@ -56,7 +56,7 @@ internal fun AgentMemoryScreen(
     MiuixScaffold(
         title = "记忆",
         onBack = { onAction(AgentMemoryAction.NavigateBack) },
-    ) { paddingValues, scrollBehavior ->
+    ) { paddingValues, scrollBehavior, sidePadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()

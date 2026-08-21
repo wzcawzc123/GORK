@@ -8,9 +8,11 @@ import fuck.andes.config.Prefs
 import fuck.andes.core.AndroidAgentLogger
 import fuck.andes.core.safeLogType
 import fuck.andes.data.datastore.SettingsDataStore
-import fuck.andes.data.repository.ProviderRepository
 import fuck.andes.data.repository.AgentMemoryRepository
 import fuck.andes.data.repository.MemoryLayerRepository
+import fuck.andes.data.repository.AppearanceSettingsRepository
+import fuck.andes.data.repository.ProviderRepository
+import fuck.andes.ui.app.PredictiveBackController
 import io.github.libxposed.service.XposedService
 import io.github.libxposed.service.XposedServiceHelper
 import java.util.concurrent.CopyOnWriteArraySet
@@ -18,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 /**
  * 模块 UI 进程的 Application。
@@ -42,6 +45,10 @@ class FuckAndesApp : Application(), XposedServiceHelper.OnServiceListener {
             return
         }
         SettingsDataStore.init(this)
+        val predictiveBackEnabled = runBlocking(Dispatchers.IO) {
+            AppearanceSettingsRepository.settings().predictiveBackEnabled
+        }
+        PredictiveBackController.apply(applicationInfo, predictiveBackEnabled)
         AgentMemoryRepository.init(this)
         MemoryLayerRepository.init(this)
         ProviderRepository.init(this)

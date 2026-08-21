@@ -1,4 +1,6 @@
 package fuck.andes.ui.components
+import fuck.andes.R
+import androidx.compose.ui.res.stringResource
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -189,9 +191,9 @@ internal fun AgentChatInputBar(
         ) {
             Text(
                 text = if (editHasLaterTurns) {
-                    "发送后将替换此消息及之后内容"
+                    stringResource(R.string.chat_edit_replace_later)
                 } else {
-                    "发送后将替换此消息"
+                    stringResource(R.string.chat_edit_replace_message)
                 },
                 style = MiuixTheme.textStyles.body2,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
@@ -237,7 +239,7 @@ internal fun AgentChatInputBar(
                 ) {
                     if (textFieldState.text.isBlank()) {
                         Text(
-                            text = if (isStreaming) "Eta 正在执行…" else "交给 Eta 去完成",
+                            text = if (isStreaming) stringResource(R.string.chat_eta_working) else stringResource(R.string.chat_input_hint),
                             style = MiuixTheme.textStyles.body1,
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
@@ -273,7 +275,7 @@ internal fun AgentChatInputBar(
                             ) {
                                 Icon(
                                     painter = painterResource(LucideR.drawable.lucide_ic_x),
-                                    contentDescription = "取消编辑",
+                                    contentDescription = stringResource(R.string.ui_cancel_edit_c698df),
                                     modifier = Modifier.size(ChatInputActionIconSize),
                                     tint = MiuixTheme.colorScheme.onSurface,
                                 )
@@ -371,7 +373,7 @@ internal fun AgentChatInputBar(
                                                 LucideR.drawable.lucide_ic_arrow_up
                                             }
                                         ),
-                                        contentDescription = if (streaming) "停止" else "发送",
+                                        contentDescription = if (streaming) stringResource(R.string.chat_stop) else stringResource(R.string.chat_send),
                                         modifier = Modifier.size(
                                             if (streaming) StopIconSize else SendIconSize
                                         ),
@@ -429,7 +431,7 @@ private fun ThinkingEffortChip(
         ) {
             Icon(
                 painter = painterResource(LucideR.drawable.lucide_ic_atom),
-                contentDescription = "思考强度，当前 ${effort.displayName}",
+                contentDescription = stringResource(R.string.chat_reasoning_effort, effort.displayName),
                 modifier = Modifier.size(ThinkingIconSize),
                 tint = contentColor,
             )
@@ -504,7 +506,7 @@ private fun PendingImageStrip(
                 ) {
                     Icon(
                         painter = painterResource(LucideR.drawable.lucide_ic_x),
-                        contentDescription = "移除图片",
+                        contentDescription = stringResource(R.string.ui_remove_image_089db3),
                         modifier = Modifier.size(11.dp),
                         tint = Color.White,
                     )

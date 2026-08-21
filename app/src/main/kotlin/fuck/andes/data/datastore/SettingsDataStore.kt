@@ -7,9 +7,15 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import fuck.andes.data.model.AppearanceAccentColor
+import fuck.andes.data.model.AppearancePaletteStyle
+import fuck.andes.data.model.AppearanceSettings
+import fuck.andes.data.model.AppearanceThemeMode
+import fuck.andes.data.model.AppearanceTopBarBlurStyle
 import fuck.andes.data.model.Settings
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
@@ -23,11 +29,23 @@ internal object SettingsDataStore {
     private val SELECTED_PROVIDER_ID = stringPreferencesKey("selected_provider_id")
     private val SELECTED_MODEL_ID = stringPreferencesKey("selected_model_id")
     private val MEMORY_ENABLED = booleanPreferencesKey("memory_enabled")
+    // ── 本地四层记忆（GORK 保留）──
     private val FOUR_LAYER_MEMORY_ENABLED = booleanPreferencesKey("four_layer_memory_enabled")
     private val MEMORY_AUTO_DISTILL_ENABLED = booleanPreferencesKey("memory_auto_distill_enabled")
     private val MEMORY_DISTILL_CURSOR = longPreferencesKey("memory_distill_cursor")
-    private val THEME_MODE = stringPreferencesKey("theme_mode")
-    private val THEME_ACCENT = stringPreferencesKey("theme_accent")
+    // ── 外观与主题（上游）──
+    private val APPEARANCE_THEME_MODE = stringPreferencesKey("appearance_theme_mode")
+    private val APPEARANCE_MONET_ENABLED = booleanPreferencesKey("appearance_monet_enabled")
+    private val APPEARANCE_PALETTE_STYLE = stringPreferencesKey("appearance_palette_style")
+    private val APPEARANCE_ACCENT_COLOR = stringPreferencesKey("appearance_accent_color")
+    private val APPEARANCE_PURE_BLACK_ENABLED = booleanPreferencesKey("appearance_pure_black_enabled")
+    private val APPEARANCE_BLUR_ENABLED = booleanPreferencesKey("appearance_blur_enabled")
+    private val APPEARANCE_TOP_BAR_BLUR_STYLE = stringPreferencesKey("appearance_top_bar_blur_style")
+    private val APPEARANCE_SWIPE_DISMISS_ENABLED =
+        booleanPreferencesKey("appearance_swipe_dismiss_enabled")
+    private val APPEARANCE_PREDICTIVE_BACK_ENABLED =
+        booleanPreferencesKey("appearance_predictive_back_enabled")
+    private val APPEARANCE_INTERFACE_SCALE = floatPreferencesKey("appearance_interface_scale")
     private const val SELECTED_MODEL_BY_PROVIDER_PREFIX = "selected_model_id_by_provider."
 
     private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = STORE_NAME)
@@ -51,18 +69,7 @@ internal object SettingsDataStore {
                     throw cause
                 }
             }
-            .map { prefs ->
-                Settings(
-                    selectedProviderId = prefs[SELECTED_PROVIDER_ID],
-                    selectedModelId = prefs[SELECTED_MODEL_ID],
-                    memoryEnabled = prefs[MEMORY_ENABLED] ?: true,
-                    fourLayerMemoryEnabled = prefs[FOUR_LAYER_MEMORY_ENABLED] ?: true,
-                    memoryAutoDistillEnabled = prefs[MEMORY_AUTO_DISTILL_ENABLED] ?: true,
-                    memoryDistillCursor = prefs[MEMORY_DISTILL_CURSOR] ?: 0L,
-                    themeMode = prefs[THEME_MODE] ?: "system",
-                    themeAccent = prefs[THEME_ACCENT],
-                )
-            }
+            .map { preferences -> preferences.toSettings() }
     }
 
     suspend fun settings(): Settings = settingsFlow().first()
@@ -70,16 +77,7 @@ internal object SettingsDataStore {
     suspend fun updateSettings(transform: (Settings) -> Settings) {
         ensureInitialized()
         dataStore.edit { prefs ->
-            val current = Settings(
-                selectedProviderId = prefs[SELECTED_PROVIDER_ID],
-                selectedModelId = prefs[SELECTED_MODEL_ID],
-                memoryEnabled = prefs[MEMORY_ENABLED] ?: true,
-                fourLayerMemoryEnabled = prefs[FOUR_LAYER_MEMORY_ENABLED] ?: true,
-                memoryAutoDistillEnabled = prefs[MEMORY_AUTO_DISTILL_ENABLED] ?: true,
-                memoryDistillCursor = prefs[MEMORY_DISTILL_CURSOR] ?: 0L,
-                themeMode = prefs[THEME_MODE] ?: "system",
-                themeAccent = prefs[THEME_ACCENT],
-            )
+            val current = prefs.toSettings()
             val updated = transform(current)
             prefs.putOrRemove(SELECTED_PROVIDER_ID, updated.selectedProviderId)
             prefs.putOrRemove(SELECTED_MODEL_ID, updated.selectedModelId)
@@ -87,8 +85,7 @@ internal object SettingsDataStore {
             prefs[FOUR_LAYER_MEMORY_ENABLED] = updated.fourLayerMemoryEnabled
             prefs[MEMORY_AUTO_DISTILL_ENABLED] = updated.memoryAutoDistillEnabled
             prefs[MEMORY_DISTILL_CURSOR] = updated.memoryDistillCursor
-            prefs[THEME_MODE] = updated.themeMode
-            prefs.putOrRemove(THEME_ACCENT, updated.themeAccent)
+            prefs.putAppearance(updated.appearance.normalized())
         }
     }
 
@@ -115,18 +112,26 @@ internal object SettingsDataStore {
     fun memoryEnabledFlow(): Flow<Boolean> =
         settingsFlow().map { it.memoryEnabled }
 
-    fun themeModeFlow(): Flow<String> =
-        settingsFlow().map { it.themeMode }
+    fun appearanceSettingsFlow(): Flow<AppearanceSettings> =
+        settingsFlow().map { it.appearance }
 
-    suspend fun setThemeMode(mode: String) {
-        updateSettings { it.copy(themeMode = mode) }
+    // ── 本地四层记忆（GORK 保留）──
+    fun fourLayerMemoryEnabledFlow(): Flow<Boolean> =
+        settingsFlow().map { it.fourLayerMemoryEnabled }
+
+    suspend fun setFourLayerMemoryEnabled(enabled: Boolean) {
+        updateSettings { it.copy(fourLayerMemoryEnabled = enabled) }
     }
 
-    fun accentColorNameFlow(): Flow<String?> =
-        settingsFlow().map { it.themeAccent }
+    fun memoryAutoDistillEnabledFlow(): Flow<Boolean> =
+        settingsFlow().map { it.memoryAutoDistillEnabled }
 
-    suspend fun setAccentColorName(name: String?) {
-        updateSettings { it.copy(themeAccent = name) }
+    suspend fun setMemoryAutoDistillEnabled(enabled: Boolean) {
+        updateSettings { it.copy(memoryAutoDistillEnabled = enabled) }
+    }
+
+    suspend fun setMemoryDistillCursor(value: Long) {
+        updateSettings { it.copy(memoryDistillCursor = value) }
     }
 
     suspend fun setSelectedProviderId(id: String?) {
@@ -165,23 +170,14 @@ internal object SettingsDataStore {
         updateSettings { it.copy(memoryEnabled = enabled) }
     }
 
-    fun fourLayerMemoryEnabledFlow(): Flow<Boolean> =
-        settingsFlow().map { it.fourLayerMemoryEnabled }
-
-    suspend fun setFourLayerMemoryEnabled(enabled: Boolean) {
-        updateSettings { it.copy(fourLayerMemoryEnabled = enabled) }
+    suspend fun setAppearanceSettings(settings: AppearanceSettings) {
+        updateSettings { it.copy(appearance = settings.normalized()) }
     }
 
-    fun memoryAutoDistillEnabledFlow(): Flow<Boolean> =
-        settingsFlow().map { it.memoryAutoDistillEnabled }
-
-    suspend fun setMemoryAutoDistillEnabled(enabled: Boolean) {
-        updateSettings { it.copy(memoryAutoDistillEnabled = enabled) }
-    }
-
-    /** 自动沉淀游标（已处理到的 L0 createdAt），进程内缓存 + DataStore 持久化。 */
-    suspend fun setMemoryDistillCursor(value: Long) {
-        updateSettings { it.copy(memoryDistillCursor = value) }
+    suspend fun updateAppearanceSettings(transform: (AppearanceSettings) -> AppearanceSettings) {
+        updateSettings { settings ->
+            settings.copy(appearance = transform(settings.appearance).normalized())
+        }
     }
 
     private fun ensureInitialized() {
@@ -199,5 +195,41 @@ internal object SettingsDataStore {
         } else {
             this[key] = value
         }
+    }
+
+    private fun Preferences.toSettings(): Settings = Settings(
+        selectedProviderId = this[SELECTED_PROVIDER_ID],
+        selectedModelId = this[SELECTED_MODEL_ID],
+        memoryEnabled = this[MEMORY_ENABLED] ?: true,
+        fourLayerMemoryEnabled = this[FOUR_LAYER_MEMORY_ENABLED] ?: true,
+        memoryAutoDistillEnabled = this[MEMORY_AUTO_DISTILL_ENABLED] ?: true,
+        memoryDistillCursor = this[MEMORY_DISTILL_CURSOR] ?: 0L,
+        appearance = AppearanceSettings(
+            themeMode = AppearanceThemeMode.fromPersistedValue(this[APPEARANCE_THEME_MODE]),
+            monetEnabled = this[APPEARANCE_MONET_ENABLED] ?: false,
+            paletteStyle = AppearancePaletteStyle.fromPersistedValue(this[APPEARANCE_PALETTE_STYLE]),
+            accentColor = AppearanceAccentColor.fromPersistedValue(this[APPEARANCE_ACCENT_COLOR]),
+            pureBlackEnabled = this[APPEARANCE_PURE_BLACK_ENABLED] ?: false,
+            blurEnabled = this[APPEARANCE_BLUR_ENABLED] ?: true,
+            topBarBlurStyle = AppearanceTopBarBlurStyle.fromPersistedValue(
+                this[APPEARANCE_TOP_BAR_BLUR_STYLE],
+            ),
+            swipeDismissEnabled = this[APPEARANCE_SWIPE_DISMISS_ENABLED] ?: true,
+            predictiveBackEnabled = this[APPEARANCE_PREDICTIVE_BACK_ENABLED] ?: true,
+            interfaceScale = this[APPEARANCE_INTERFACE_SCALE] ?: 1f,
+        ).normalized(),
+    )
+
+    private fun MutablePreferences.putAppearance(settings: AppearanceSettings) {
+        this[APPEARANCE_THEME_MODE] = settings.themeMode.persistedValue
+        this[APPEARANCE_MONET_ENABLED] = settings.monetEnabled
+        this[APPEARANCE_PALETTE_STYLE] = settings.paletteStyle.persistedValue
+        this[APPEARANCE_ACCENT_COLOR] = settings.accentColor.persistedValue
+        this[APPEARANCE_PURE_BLACK_ENABLED] = settings.pureBlackEnabled
+        this[APPEARANCE_BLUR_ENABLED] = settings.blurEnabled
+        this[APPEARANCE_TOP_BAR_BLUR_STYLE] = settings.topBarBlurStyle.persistedValue
+        this[APPEARANCE_SWIPE_DISMISS_ENABLED] = settings.swipeDismissEnabled
+        this[APPEARANCE_PREDICTIVE_BACK_ENABLED] = settings.predictiveBackEnabled
+        this[APPEARANCE_INTERFACE_SCALE] = settings.interfaceScale
     }
 }

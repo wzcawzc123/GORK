@@ -1,8 +1,5 @@
 package fuck.andes.data.model
 
-import kotlinx.serialization.Serializable
-
-@Serializable
 data class Settings(
     val selectedProviderId: String? = null,
     val selectedModelId: String? = null,
@@ -11,7 +8,6 @@ data class Settings(
     val fourLayerMemoryEnabled: Boolean = true,
     val memoryAutoDistillEnabled: Boolean = true,
     val memoryDistillCursor: Long = 0L,
-    // ── 外观与主题 ──
-    val themeMode: String = "system",
-    val themeAccent: String? = null,
+    // ── 外观与主题（上游 AppearanceSettings 架构）──
+    val appearance: AppearanceSettings = AppearanceSettings(),
 )

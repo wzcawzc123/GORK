@@ -1,4 +1,6 @@
 package fuck.andes.ui.components
+import fuck.andes.R
+import androidx.compose.ui.res.stringResource
 
 import android.content.Context
 import android.content.Intent
@@ -126,7 +128,7 @@ internal fun AgentAttachmentPickerButton(
         ) {
             Icon(
                 painter = painterResource(LucideR.drawable.lucide_ic_plus),
-                contentDescription = "添加附件",
+                contentDescription = stringResource(R.string.ui_add_attachment_dba9e8),
                 modifier = Modifier.size(ChatInputActionIconSize),
                 tint = MiuixTheme.colorScheme.onSurface,
             )
@@ -181,22 +183,22 @@ internal fun AgentAttachmentPickerButton(
 
     WindowDialog(
         show = showPathDialog,
-        title = "输入文件路径",
-        summary = "支持内部存储或 /data/local/tmp 下的文件和文件夹",
+        title = stringResource(R.string.ui_input_file_path_36d474),
+        summary = stringResource(R.string.ui_supports_files_and_folders_under_internal_storage_or_520786),
         onDismissRequest = { showPathDialog = false },
     ) {
         Column {
             TextField(
                 value = pathInput,
                 onValueChange = { pathInput = it },
-                label = "绝对路径",
+                label = stringResource(R.string.ui_absolute_path_9ac6fc),
                 useLabelAsPlaceholder = true,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 modifier = Modifier.fillMaxWidth(),
             )
             MiuixDialogActions(
-                confirmText = "添加",
+                confirmText = stringResource(R.string.attachment_add),
                 confirmEnabled = pathInput.trim().startsWith('/'),
                 onCancel = { showPathDialog = false },
                 onConfirm = {
@@ -272,7 +274,7 @@ internal fun PendingFileReferenceStrip(
                 ) {
                     Icon(
                         painter = painterResource(LucideR.drawable.lucide_ic_x),
-                        contentDescription = "移除文件引用",
+                        contentDescription = stringResource(R.string.ui_remove_file_reference_04bbfc),
                         modifier = Modifier.size(15.dp),
                         tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
                     )

@@ -1,4 +1,6 @@
 package fuck.andes.ui.components
+import fuck.andes.R
+import androidx.compose.ui.res.stringResource
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -29,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -84,6 +87,8 @@ internal fun AgentModelPickerButton(
             windowHorizontalInsetPx = popupWindowInsetPx,
         )
     }
+    val currentModel = selected?.displayName ?: stringResource(R.string.model_not_selected)
+    val switchModelDescription = stringResource(R.string.model_switch_current, currentModel)
     Box(modifier = modifier) {
         IconButton(
             onClick = {
@@ -94,7 +99,7 @@ internal fun AgentModelPickerButton(
             minWidth = ChatInputActionSize,
             minHeight = ChatInputActionSize,
             modifier = Modifier.semantics {
-                contentDescription = "切换模型，当前为 ${selected?.displayName ?: "未选择"}"
+                contentDescription = switchModelDescription
             },
         ) {
             ModelBrandMark(
@@ -197,7 +202,11 @@ private fun ModelProviderGroupHeader(
         Spacer(modifier = Modifier.width(8.dp))
         Icon(
             painter = painterResource(LucideR.drawable.lucide_ic_chevron_down),
-            contentDescription = if (expanded) "收起 $name" else "展开 $name",
+            contentDescription = if (expanded) {
+                stringResource(R.string.model_collapse_provider, name)
+            } else {
+                stringResource(R.string.model_expand_provider, name)
+            },
             modifier = Modifier
                 .size(15.dp)
                 .graphicsLayer { rotationZ = arrowRotation },
@@ -256,7 +265,7 @@ private fun ModelPickerRow(
             Spacer(modifier = Modifier.width(8.dp))
             Icon(
                 painter = painterResource(LucideR.drawable.lucide_ic_check),
-                contentDescription = "当前模型",
+                contentDescription = stringResource(R.string.ui_current_model_a0af8f),
                 modifier = Modifier.size(18.dp),
                 tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
             )
@@ -278,13 +287,23 @@ internal fun AgentContextUsageButton(
         progress >= 0.80f -> StatusWarning
         else -> MiuixTheme.colorScheme.primary
     }
-    val summary = formatContextUsage(usage)
+    val locale = LocalConfiguration.current.locales[0]
+    val summary = formatContextUsage(
+        usage = usage,
+        noUsageText = stringResource(R.string.context_no_previous_usage),
+        noLimitText = stringResource(R.string.context_no_model_limit),
+        locale = locale,
+    )
     val detail = when {
-        usage.contextTokens == null -> "$summary\n完成一次回复后显示服务端实测"
-        else -> "$summary\n服务端上轮实测"
+        usage.contextTokens == null -> stringResource(R.string.context_usage_after_response, summary)
+        else -> stringResource(R.string.context_usage_previous_response, summary)
     }
+    val usageDescription = stringResource(
+        R.string.context_usage_description,
+        summary.replace('\n', ' '),
+    )
     RichTooltipBox(
-        title = "上下文用量",
+        title = stringResource(R.string.ui_contextual_usage_d12810),
         text = detail,
         state = tooltipState,
         positioning = TooltipAnchorPosition.Above,
@@ -305,7 +324,7 @@ internal fun AgentContextUsageButton(
                 strokeWidth = 2.5.dp,
                 size = ChatInputActionIconSize,
                 modifier = Modifier.semantics {
-                    contentDescription = "上下文用量，${summary.replace('\n', '，')}"
+                    contentDescription = usageDescription
                 },
             )
         }
