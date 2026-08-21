@@ -138,6 +138,16 @@ internal object OfficialModelCatalog {
                 reasoning = true,
                 contextWindow = 1_000_000,
             ),
+            officialModel(
+                id = "builtin-deepseek-v4-flash-vision-exp",
+                modelId = "deepseek-v4-flash-vision-exp",
+                displayName = "DeepSeek V4 Flash Vision Exp",
+                ownedBy = "deepseek",
+                inputModalities = listOf(Model.TEXT_MODALITY, Model.IMAGE_MODALITY),
+                toolCall = true,
+                reasoning = true,
+                contextWindow = 1_000_000,
+            ),
         ),
         ProviderSourceTypes.MOONSHOT to listOf(
             officialModel(
@@ -267,7 +277,14 @@ internal object OfficialModelCatalog {
                     ?: official.displayName,
                 ownedBy = model.ownedBy ?: official.ownedBy,
                 contextWindow = model.contextWindow ?: official.contextWindow,
-                inputModalities = model.inputModalities.ifEmpty { official.inputModalities },
+                inputModalities = if (
+                    model.inputModalities == listOf(Model.TEXT_MODALITY) &&
+                    official.inputModalities != listOf(Model.TEXT_MODALITY)
+                ) {
+                    official.inputModalities
+                } else {
+                    model.inputModalities
+                },
                 outputModalities = model.outputModalities.ifEmpty { official.outputModalities },
                 attachment = model.attachment ?: official.attachment,
                 toolCall = model.toolCall ?: official.toolCall,
