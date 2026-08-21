@@ -100,7 +100,7 @@ jobs:
 
           # 签名钉扎校验：正式签名必须匹配固定证书指纹，防止签名漂移
           if [[ "$SIGN_MODE" == "secrets" ]]; then
-            expected_sha256="2deb0f3ddcc43e185b46c3b23d03e1d95afddf17d296a5086bfd63a5d9f4aab8"
+            expected_sha256="465e1f705b29b420513ea72502e738a3996f8900c9a8c7631ffecb74c4d85824"
             actual_sha256="$(echo "$certs_output" | grep -iE 'SHA-256 digest' | head -n 1 | sed -E 's/.*: *//' | tr '[:upper:]' '[:lower:]')"
             if [[ -z "$actual_sha256" || "$actual_sha256" != "$expected_sha256" ]]; then
               echo "::error::签名钉扎校验失败：期望 $expected_sha256，实际 ${actual_sha256:-<未提取到>}。请检查 Release 签名 Secrets 是否被修改或过期。"
